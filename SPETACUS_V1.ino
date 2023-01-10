@@ -171,7 +171,7 @@ void setup() {
  int status = sensor.read();
 
 switch (status) {
-  if (! AM2315_OK) {
+  if (status != AM2315_OK) {
     Serial.println("Error in AM2315 sensor, check wiring!");
     while (1);
   }
