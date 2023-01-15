@@ -2,11 +2,11 @@
 // Github: @Vaz_15K
 // 01\03\2023
 
-String versao  = "SPETACUS V1";
+String versao  = "SPETACUS V1.1";
 
 // Nessa versão:
-//              Novo Nome "SPETACUS"
-//              Subtituição do sensor BME280 pelo AM2315IC
+//              Limpeza do codigo e melhorias
+//              Substituição da lib AM2315
 
 
 //grau   tensão (5.1 Koh)  tensao (10 koh)
@@ -22,36 +22,22 @@ String versao  = "SPETACUS V1";
 #include <SPI.h>
 #include <SD.h>
 #include <LiquidCrystal.h>
-//#include <SoftwareSerial.h>
-//SoftwareSerial esp8266(4, 5);
-
-#include <AM2315.h>
-AM2315 sensor(&Wire);
-
+#include <Adafruit_I2CDevice.h>
+#include <Adafruit_AM2315.h>
 #include <Wire.h>
-//#include <Adafruit_Sensor.h>
-//#include <Adafruit_BME280.h>
+
 #define SEALEVELPRESSURE_HPA (1013.25)
-//Adafruit_BME280 bme;
+Adafruit_AM2315 am2315;
 
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7); //(12, 11, 5, 4, 3, 2);//
 
-
-//String AP = "JD_LINK";       // CHANGE ME
-//String PASS = "e06$i16#e09@"; // CHANGE ME
-//String AP = "MotoPowerRSZ";       // CHANGE ME
-//String PASS = "123bla45"; // CHANGE ME
-//String AP = "Adriana-2.4G";       // CHANGE ME
-//String PASS = "adriana2403"; // CHANGE ME
-//String AP = "TP-LINK-208981";       // CHANGE ME
-//String PASS = "labhidra16"; // CHANGE ME
-String AP = "";
-String PASS = "";
-
+String AP = ""; //Colocar o nome da rede entre as aspas
+String PASS = ""; // Colocar a senha da rede entre as aspas
 
 String API = "KSE7EQ4177BEU6IV";   // CHANGE ME
 String HOST = "api.thingspeak.com";
 String PORT = "80";
+
 //String field = "field1";
 int countTrueCommand;
 int countTimeCommand;
@@ -71,18 +57,20 @@ long ti_fecha = 0;
 long dt_fecha_max = 0 ;
 int Ffecha = 0;
 
+// Variaveis de medição
+// obs: Variaveis de pressao ficaram aqui no codigo, porem nao possui um sensor responsavel por medir isso.
 
 float aTemp[9];
 float aUmi[9];
 float aPre[9];
 int ct_a = 0; /// conta array indice
-float Temp_i; float Temp_acu = 0; float Temp_med;
+float temperature, humidity;
+float Temp_i = temperature; float Temp_acu = 0; float Temp_med;
 float Temp_max = 0; float Temp_min = 100;
-float Umi_i; float Umi_acu = 0; float Umi_med;
+float Umi_i = humidity; float Umi_acu = 0; float Umi_med;
 float Umi_max = 0; float Umi_min = 100;
 float Pre_i; float Pre_acu = 0; float Pre_med;
 float Pre_max = 0; float Pre_min = 5000;
-
 
 //// VARIÁVEIS DO GANGORRA////
 const int REED = 31;              //The reed switch outputs to digital pin 31
@@ -147,8 +135,8 @@ String TagCo;
 float VelCo;
 
 void setup() {
+  
   Serial.begin(9600);
-  //esp8266.begin(115200); // baud rate padrão do ESP8266
   Serial1.begin(115200);   //baud rate padrão do ESP8266
   Serial3.begin(4800);
  
@@ -166,16 +154,21 @@ void setup() {
   Serial.println(versao);
   pinMode(2, INPUT);
   digitalWrite(2, HIGH);
-  
-//
- int status = sensor.read();
 
-switch (status) {
-  if (status != AM2315_OK) {
-    Serial.println("Error in AM2315 sensor, check wiring!");
-    while (1);
+//
+
+  while (!Serial) {
+    delay(10);
   }
-    }
+  Serial.println("AM2315 Test!");
+
+  if (! am2315.begin()) {
+     Serial.println("Sensor not found, check wiring & pullups!");
+     while (1);
+  }
+  delay(2000);
+
+//
   
   Serial.print("verificando cartão...");
   if (!SD.begin(CS_pin))
@@ -255,14 +248,12 @@ void loop() {
   {
     PPS = float(ct_vento) / float(dt_laco_max / 1000);
     RPM = PPS * 60;
+    
 
-    float Temp_i = sensor.getTemperature();
-    float Hum_i = sensor.getHumidity();
 
     bir_volt_i = analogRead(bir_pin) * (5.0 / 1023.0);
-    //getTemperature() = Temp_i ;
-   // getHumidity() = Umi_i;
-    ve_vento_i = (((4 * pi * radius * RPM) / 60) / 1000) * 3.6; // Calculate wind speed on km/h
+
+    ve_vento_i = (((4 * pi * radius * RPM) / 60) / 1000) * 3.6; // Calcula a velocidade do vento em Km/h
     Umi_acu = Umi_acu + Umi_i;
     Pre_acu = Pre_acu + Pre_i;
     Temp_acu = Temp_acu + Temp_i;
@@ -290,33 +281,33 @@ void loop() {
     }
 
     // MIN MAX  para temperatura
-    if (Temp_i > Temp_max)
-    {
+    if (Temp_i > Temp_max) {
       Temp_max = Temp_i;
     }
-    if (Temp_i < Temp_min)
-    {
+    
+    if (Temp_i < Temp_min) {
+      
       Temp_min = Temp_i;
     }
+    
     /// MIN MAX para Pre
-    if (Pre_i > Pre_max)
-    {
+    if (Pre_i > Pre_max) {
       Pre_max = Pre_i;
     }
-    if (Pre_i < Pre_min)
-    {
+    
+    if (Pre_i < Pre_min){
       Pre_min = Pre_i;
     }
 
     // MIN MAX para Umi
-    if (Umi_i > Umi_max)
-    {
+    if (Umi_i > Umi_max) {
       Umi_max = Umi_i;
-    }
-    if (Umi_i < Umi_min)
-    {
+      }
+      
+    if (Umi_i < Umi_min) {
       Umi_min = Umi_i;
     }
+    
     Serial.print(Temp_i); Serial.print(";"); Serial.print(Umi_i); Serial.print(";"); Serial.print(Pre_i); Serial.print(";");
     Serial.print(pu_ct); Serial.print(";"); Serial.print(mm); Serial.print(";"); Serial.print("vento: "); Serial.print(RPM); Serial.print(";");
     Serial.print(ve_vento_i); Serial.print(";"); Serial.print(bir_volt_i); Serial.print(";");  Serial.print(ct_a); Serial.print(";"); Serial.println(dt_laco);
@@ -327,8 +318,8 @@ void loop() {
     ti_laco = millis();
   }
 
-  if (dt_nuvem > dt_nuvem_max)
-  {
+  if (dt_nuvem > dt_nuvem_max) {
+    
     conta_mss_nuvem  = conta_mss_nuvem + 1;
     Temp_med = Temp_acu / (ct_a);
     Umi_med = Umi_acu / (ct_a);
@@ -403,25 +394,24 @@ void sendCommand(String command, int maxTime, char readReplay[]) {
   //  Serial.print(". at command => ");
   //  Serial.print(command);
   //  Serial.print(" ");
-  while (countTimeCommand < (maxTime * 2))
-  {
+  
+  while (countTimeCommand < (maxTime * 2)) {
     //esp8266.println(command);//at+cipsend
     Serial1.println(command);
-    if (Serial1.find(readReplay)) //ok
-    {
+    if (Serial1.find(readReplay)) {
       found = true;
       break;
     }
     countTimeCommand++;
   }
-  if (found == true)
-  {
+  
+  if (found == true) {
     // Serial.println("OYI");
     countTrueCommand++;
     countTimeCommand = 0;
   }
-  if (found == false)
-  {
+  
+  if (found == false) {
     //  Serial.println("Fail");
     countTrueCommand = 0;
     countTimeCommand = 0;
@@ -429,8 +419,7 @@ void sendCommand(String command, int maxTime, char readReplay[]) {
   found = false;
 }
 
-float StrToFloat(String str)
-{
+  float StrToFloat(String str) {
   char carray[str.length() + 1];
   str.toCharArray(carray, sizeof(carray));
   return atof(carray);
@@ -443,7 +432,7 @@ void addcount() {
 
 void printDirectory(File dir, int numTabs) {
   while (true) {
-
+    
     File entry =  dir.openNextFile();
     ct_algo = ct_algo + 1;
     Serial.println(ct_algo);
@@ -451,11 +440,13 @@ void printDirectory(File dir, int numTabs) {
       // no more files
       break;
     }
+    
     for (uint8_t i = 0; i < numTabs; i++) {
       Serial.print('\t');
-
     }
+    
     Serial.print(entry.name());
+    
     if (entry.isDirectory()) {
       Serial.println("/");
       printDirectory(entry, numTabs + 1);
@@ -468,8 +459,7 @@ void printDirectory(File dir, int numTabs) {
   }
 }
 
-void grava_cartao_SD(String uid_card)
-{
+void grava_cartao_SD(String uid_card){
   //Abre arquivo no SD para gravacao
   file = SD.open(arq_log, FILE_WRITE);
   file.println(uid_card);
@@ -493,7 +483,7 @@ void serialEvent3() {
 }
 
 //Processa GPS string GPRMC
-String ParseGPRMC(String mss) {
+  String ParseGPRMC(String mss) {
   String gpstime = "";
   String gpsdate = "";
   String gpsstatus = "";
@@ -511,39 +501,47 @@ String ParseGPRMC(String mss) {
     if (mss.charAt(i) != ','  && par == 1) {
       gpstime += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 2) {
       gpsstatus += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 3) {
       lat += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 4) {
       latd += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 5) {
       lon += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 6) {
       lond += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 7) {
       velo += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) != ',' && par == 9) {
       gpsdate += mss.charAt(i);
     }
+    
     else if (mss.charAt(i) == ',') {
       par ++;
-
     }
   }
-   int horalen =  gpstime.length();
+  
+  int horalen =  gpstime.length();
   int k = horalen - 2;
   gpsSeg = "";
-  for (k=4; k < 6; k ++)
-  {
+  for (k=4; k < 6; k ++) {
     gpsSeg = gpsSeg + gpstime[k];
   }
+  
   //Serial.print("velocidade Router");
   // Serial.println(velo);
   LatCo = -lat2latdd(lat);
@@ -555,34 +553,32 @@ String ParseGPRMC(String mss) {
   return out;
 }
 
-float lat2latdd(String lat)
-{ 
+  float lat2latdd(String lat) { 
   String latg = "";
   String latm = "";
   latg += lat.charAt(0);
   latg += lat.charAt(1);
 
-  for (int i = 2; i < lat.length() ; i++)
-  {
+  for (int i = 2; i < lat.length() ; i++) {
     latm += lat.charAt(i);
   }
+  
   float flat = StrToFloat(latg);
   float flatm = StrToFloat(latm);
   float flatdd = flat + flatm / 60;
   return flatdd;
 }
 
-float lon2londd(String lon)
-{
+  float lon2londd(String lon) {
   String lon_g = "";
   String lon_m = "";
   lon_g += lon.charAt(0);
   lon_g += lon.charAt(1);
   lon_g += lon.charAt(2);
-  for (int i = 3; i < lon.length() ; i++)
-  {
+  for (int i = 3; i < lon.length() ; i++) {
     lon_m += lon.charAt(i);
   }
+  
   float flon = StrToFloat(lon_g);
   float flonm = StrToFloat(lon_m);
   float flondd = flon + flonm / 60;
