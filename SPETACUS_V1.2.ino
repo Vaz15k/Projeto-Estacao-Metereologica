@@ -1,13 +1,15 @@
 // Keven Eduardo Vaz Bilibio
 // Github: @Vaz_15K
-// 01\03\2023
+// 24/01\2023
 
-String versao  = "SPETACUS V1.1";
+String versao  = "SPETACUS V1.2";
 
-// Nessa versão:
-//              Limpeza do codigo e melhorias
-//              Substituição da lib AM2315
+// Changelog:
+//              Mais Limpeza do codigo e melhorias
+//              Substituição do sensor e da lib AM2315;
+//              Novo sensor SHT15 com sua respectiva lib SHT1x;
 
+//OBS: Usado Arduino Mega 2560.
 
 //grau   tensão (5.1 Koh)  tensao (10 koh)
 //0 1.69  2.51
@@ -22,21 +24,19 @@ String versao  = "SPETACUS V1.1";
 #include <SPI.h>
 #include <SD.h>
 #include <LiquidCrystal.h>
-#include <Adafruit_I2CDevice.h>
-#include <Adafruit_AM2315.h>
+#include <SHT1x.h>
 #include <Wire.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
-Adafruit_AM2315 am2315;
 
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7); //(12, 11, 5, 4, 3, 2);//
 
 String AP = ""; //Colocar o nome da rede entre as aspas
 String PASS = ""; // Colocar a senha da rede entre as aspas
 
-String API = "KSE7EQ4177BEU6IV";   // CHANGE ME
-String HOST = "api.thingspeak.com";
-String PORT = "80";
+String API = "";      // Use aqui a chave de autenticação da sua nuvem
+String HOST = "api.thingspeak.com";   // O Host da sua nuvem
+String PORT = "80";                   // Pota da sua Nuvem
 
 //String field = "field1";
 int countTrueCommand;
@@ -82,6 +82,10 @@ float pu_mm = 4;                 // constante de calibração pulso por mm
 float mm = 0;
 float mmho = 0;                  // intensidade de chuva (mm/h)
 
+//Variaveis do Sensor de Temp/Hum
+#define dataPin  20
+#define clockPin 21
+SHT1x sht1x(dataPin, clockPin);
 
 // VARIÁVEIS DA ANEMOMETRO///////
 const float pi = 3.14159265;     // Numero pi
@@ -146,7 +150,7 @@ void setup() {
   pinMode(2, INPUT);
   digitalWrite(2, HIGH);
   Serial.println("BUENAS...");
-   lcd.begin(16, 2);
+  lcd.begin(16, 2);
   lcd.print("BUENAS..");
   lcd.setCursor(0, 1);
   lcd.print(versao);
@@ -154,21 +158,6 @@ void setup() {
   Serial.println(versao);
   pinMode(2, INPUT);
   digitalWrite(2, HIGH);
-
-//
-
-  while (!Serial) {
-    delay(10);
-  }
-  Serial.println("AM2315 Test!");
-
-  if (! am2315.begin()) {
-     Serial.println("Sensor not found, check wiring & pullups!");
-     while (1);
-  }
-  delay(2000);
-
-//
   
   Serial.print("verificando cartão...");
   if (!SD.begin(CS_pin))
@@ -185,7 +174,7 @@ void setup() {
     //    lcd.setCursor(0, 0);
     //    lcd.print("Cartao beleza");
 
-    delay(500);
+    delay(5000);
   }
 
   File raiz;
@@ -230,16 +219,19 @@ void loop() {
     stringComplete3 = false;
   }
 
+// Le os valores do Sensor
+  Temp_i = sht1x.readTemperatureC();
+  Umi_i = sht1x.readHumidity();
 
-  val = digitalRead(REED);      //Read the status of the Reed swtich
+  val = digitalRead(REED);                   //Read the status of the Reed swtich
   if ((val == LOW) && (old_val == HIGH)) {   //Check to see if the status has changed
-    delay(300);                   // Delay put in to deal with any "bouncing" in the switch.
-    pu_ct = pu_ct + 1;   //pulso da gangorra
+    delay(300);                              // Delay put in to deal with any "bouncing" in the switch.
+    pu_ct = pu_ct + 1;                       //pulso da gangorra
     mm = float(pu_ct) / pu_mm;
-    old_val = val;              //Make the old value equal to the current value
+    old_val = val;                           //Make the old value equal to the current value
   }
   else {
-    old_val = val;              //If the status hasn't changed then do nothing
+    old_val = val;                           //If the status hasn't changed then do nothing
   }
   dt_laco = millis() - ti_laco;
   dt_nuvem = millis() - ti_nuvem;
@@ -311,6 +303,7 @@ void loop() {
     Serial.print(Temp_i); Serial.print(";"); Serial.print(Umi_i); Serial.print(";"); Serial.print(Pre_i); Serial.print(";");
     Serial.print(pu_ct); Serial.print(";"); Serial.print(mm); Serial.print(";"); Serial.print("vento: "); Serial.print(RPM); Serial.print(";");
     Serial.print(ve_vento_i); Serial.print(";"); Serial.print(bir_volt_i); Serial.print(";");  Serial.print(ct_a); Serial.print(";"); Serial.println(dt_laco);
+    
     lcd.setCursor(0, 1);
     lcd.print(Temp_i);lcd.print(";"); lcd.print(Umi_i);lcd.print(";");lcd.print(ve_vento_i);
     ct_vento = 0;
